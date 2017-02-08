@@ -4,6 +4,9 @@ Implementation of double CNN.
 See https://github.com/tflearn/tflearn/blob/master/tflearn/layers/conv.py
 and
 https://github.com/Shuangfei/doublecnn/blob/master/main.py#L43-L78
+
+Publication:
+    https://arxiv.org/pdf/1610.09716v1.pdf - especially "Algorithm 1" on page 5
 """
 
 
@@ -21,6 +24,9 @@ def conv_2d_double(incoming, nb_filter, filter_size, strides=1, padding='same',
                    name="Conv2D"):
     """Double convolution."""
     input_shape = utils.get_incoming_shape(incoming)
+    print("input_shape: %s" % str(input_shape))  # None x w^l x h^l x c^l
+    # nb_filter = c^{l+1}
+    # filter_size = z'
     assert len(input_shape) == 4, "Incoming Tensor shape must be 4-D"
     filter_size = utils.autoformat_filter_conv2d(filter_size,
                                                  input_shape[-1],
@@ -61,22 +67,44 @@ def conv_2d_double(incoming, nb_filter, filter_size, strides=1, padding='same',
             tf.add_to_collection(tf.GraphKeys.LAYER_VARIABLES + '/' + name, b)
 
         # The double conovlution part
-        kernel_size = 3
-        filter_offset = filter_size[0] - kernel_size + 1
-        n_times = filter_offset ** 2
-        W_shape = (nb_filter * n_times, input_shape[1]) + (kernel_size,) * 2
-        #           (32      *       1, 28,               (3, ) )
-        print("W_shape: %s" % str(W_shape))
-        prod_ = np.prod(W_shape[1:])
-        print("prod: %s" % prod_)
-        identity = np.eye(prod_, dtype=np.float32)
-        new_shape = (np.prod(W_shape[1:]),) + W_shape[1:]
-        print("identity: %s" % str(identity.shape))
-        print("new shape: %s" % str(new_shape))
-        filter_ = np.reshape(identity, new_shape)
+        # Try 1: Implement a simplified version of the pseudo-code
+        z = 3  # z' = z?
+        c = input_shape[-1]  # c^l
+        c_n = nb_filter  # c^{l+1}
+        I = np.eye(c * z**2, dtype=np.float32)
+        I = I.reshape(c * z**2, c, z, z)
+        w = input_shape[1]  # for now, w^l = w^{l+1} - only padding='same'
+        h = input_shape[2]  # for now, w^l = w^{l+1} - only padding='same'
+        W_tilde = tf.matmul(W, I)
+        W_tilde = W_tilde.reshape(c_n, c, z, z)
+        O_n = tf.matmul(I, W_tilde)
+        O_n = O_n.reshape(c_n * w * h, 1, 1)
+        I_n = O_n  # for now, stride s =1 -> no pooling
+        inference = I_n.reshape(c_n, w, h)
+        # ValueError: Dimension 0 in both shapes must be equal, but are 3 and 9
+        # for 'Conv2D/MatMul' (op: 'BatchMatMul') with
+        # input shapes: [3,3,1,32], [9,1,3,3].
 
-        W_effective = tf.nn.conv2d(W, filter_, strides, padding='VALID')
-        inference = tf.nn.conv2d(incoming, W_effective, strides, padding)
+        # Try 2: Translate the theano code:
+        # filter_offset = filter_size[0] - kernel_size + 1
+        # n_times = filter_offset ** 2
+        # W_shape = (nb_filter * n_times, input_shape[1]) + (kernel_size,) * 2
+        # #           (32      *       1, 28,               (3, ) )
+        # print("W_shape: %s" % str(W_shape))
+        # prod_ = np.prod(W_shape[1:])
+        # print("prod: %s" % prod_)
+        # identity = np.eye(prod_, dtype=np.float32)  # I_l \in c^l z^2
+        # new_shape = (np.prod(W_shape[1:]),) + W_shape[1:]
+        # new_shape = (new_shape[2],
+        #              new_shape[3],
+        #              new_shape[0],
+        #              new_shape[1],)
+        # print("identitysss: %s" % str(identity.shape))
+        # print("new shape: %s" % str(new_shape))
+        # filter_ = np.reshape(identity, new_shape)
+
+        # W_effective = tf.nn.conv2d(W, filter_, strides, padding='VALID')
+        # inference = tf.nn.conv2d(incoming, W_effective, strides, padding)
 
         # Normal convolution again
         if b:
