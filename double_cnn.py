@@ -75,13 +75,16 @@ def conv_2d_double(incoming, nb_filter, filter_size, strides=1, padding='same',
         I = I.reshape(z, z, c * z**2, c)
         w = input_shape[1]  # for now, w^l = w^{l+1} - only padding='same'
         h = input_shape[2]  # for now, w^l = w^{l+1} - only padding='same'
+
+        # Create the effective filters
         W_tilde = tf.nn.conv2d(W, I, strides, padding='VALID')
         # ValueError: Dimensions must be equal, but are 32 and 9 for
         # 'Conv2D/Conv2D' (op: 'Conv2D') with input shapes:
         # [3,3,1,32], [3,3,9,1].
-
         W_tilde = W_tilde.reshape(c_n, c, z, z)
-        O_n = tf.nn.conv2d(I, W_tilde, strides, padding='VALID')
+
+        # Convolve input "image" with effective filters
+        O_n = tf.nn.conv2d(incoming, W_tilde, strides, padding='VALID')
         O_n = O_n.reshape(c_n * w * h, 1, 1)
         I_n = O_n  # for now, stride s =1 -> no pooling
         inference = I_n.reshape(c_n, w, h)
@@ -90,20 +93,10 @@ def conv_2d_double(incoming, nb_filter, filter_size, strides=1, padding='same',
         # filter_offset = filter_size[0] - kernel_size + 1
         # n_times = filter_offset ** 2
         # W_shape = (nb_filter * n_times, input_shape[1]) + (kernel_size,) * 2
-        # #           (32      *       1, 28,               (3, ) )
-        # print("W_shape: %s" % str(W_shape))
         # prod_ = np.prod(W_shape[1:])
-        # print("prod: %s" % prod_)
         # identity = np.eye(prod_, dtype=np.float32)  # I_l \in c^l z^2
         # new_shape = (np.prod(W_shape[1:]),) + W_shape[1:]
-        # new_shape = (new_shape[2],
-        #              new_shape[3],
-        #              new_shape[0],
-        #              new_shape[1],)
-        # print("identitysss: %s" % str(identity.shape))
-        # print("new shape: %s" % str(new_shape))
         # filter_ = np.reshape(identity, new_shape)
-
         # W_effective = tf.nn.conv2d(W, filter_, strides, padding='VALID')
         # inference = tf.nn.conv2d(incoming, W_effective, strides, padding)
 
