@@ -72,18 +72,19 @@ def conv_2d_double(incoming, nb_filter, filter_size, strides=1, padding='same',
         c = input_shape[-1]  # c^l
         c_n = nb_filter  # c^{l+1}
         I = np.eye(c * z**2, dtype=np.float32)
-        I = I.reshape(c * z**2, c, z, z)
+        I = I.reshape(z, z, c * z**2, c)
         w = input_shape[1]  # for now, w^l = w^{l+1} - only padding='same'
         h = input_shape[2]  # for now, w^l = w^{l+1} - only padding='same'
-        W_tilde = tf.matmul(W, I)
+        W_tilde = tf.nn.conv2d(W, I, strides, padding='VALID')
+        # ValueError: Dimensions must be equal, but are 32 and 9 for
+        # 'Conv2D/Conv2D' (op: 'Conv2D') with input shapes:
+        # [3,3,1,32], [3,3,9,1].
+
         W_tilde = W_tilde.reshape(c_n, c, z, z)
-        O_n = tf.matmul(I, W_tilde)
+        O_n = tf.nn.conv2d(I, W_tilde, strides, padding='VALID')
         O_n = O_n.reshape(c_n * w * h, 1, 1)
         I_n = O_n  # for now, stride s =1 -> no pooling
         inference = I_n.reshape(c_n, w, h)
-        # ValueError: Dimension 0 in both shapes must be equal, but are 3 and 9
-        # for 'Conv2D/MatMul' (op: 'BatchMatMul') with
-        # input shapes: [3,3,1,32], [9,1,3,3].
 
         # Try 2: Translate the theano code:
         # filter_offset = filter_size[0] - kernel_size + 1
